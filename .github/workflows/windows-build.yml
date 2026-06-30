@@ -1,0 +1,79 @@
+name: windows-build
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt -r requirements-test.txt
+
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest
+
+      - name: Read version
+        id: ver
+        shell: pwsh
+        run: "echo \"version=$(& ./scripts/print_version.ps1)\" >> $env:GITHUB_OUTPUT"
+
+      - name: Build portable
+        shell: pwsh
+        run: |
+          $env:GP_ONEFILE = "1"
+          python -m PyInstaller --noconfirm --distpath dist/portable --workpath build GcodeProfiler.spec
+
+      - name: Build onedir
+        shell: pwsh
+        run: |
+          Remove-Item Env:\GP_ONEFILE -ErrorAction SilentlyContinue
+          python -m PyInstaller --noconfirm --distpath dist/app --workpath build GcodeProfiler.spec
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $p = Start-Process "dist/app/GcodeProfiler/GcodeProfiler.exe" -ArgumentList '--smoke-test' -Wait -PassThru -WindowStyle Hidden
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/installer | Out-Null
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=${{ steps.ver.outputs.version }}" installer/GcodeProfiler.iss
+
+      - name: Verify artifacts
+        shell: pwsh
+        run: ./scripts/verify_artifacts.ps1
+
+      - name: Upload portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: GcodeProfiler-portable-${{ steps.ver.outputs.version }}-x64
+          path: dist/portable/GcodeProfiler.exe
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: GcodeProfiler-Setup-${{ steps.ver.outputs.version }}-x64
+          path: dist/installer/*.exe

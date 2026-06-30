@@ -25,13 +25,42 @@
 `dist\GcodeProfiler.exe` を実行 →「G-code を開く」→ 各カードをクリックして値を確認・編集 →
 「出力先」を選んで「プロファイル書き出し」。
 
-## 開発
+## インストール / 配布
+
+- **インストーラ版**: `GcodeProfiler-Setup-<version>-x64.exe` を実行（管理者権限・x64）。
+  - ユーザーデータ（設定・プロファイル・カスタム辞書）は `%LOCALAPPDATA%\GcodeProfiler` に保存され、
+    アンインストールや上書きアップグレードでは**削除されません**。
+  - 任意で「デスクトップショートカット」「.gcode を Open With に登録」を選択可（既定は無効）。
+  - アップグレードは同一フォルダへ上書き（AppId固定）。アンインストールはプログラム/ショートカット/
+    任意の関連付けのみ削除し、ユーザーデータと出力ファイルは残します。
+- **ポータブル版**: `GcodeProfiler.exe` を任意フォルダに置いて実行（インストール不要）。
+- 署名: 初期リリースは**未署名**のため、Windows SmartScreen 警告が出ることがあります
+  （「詳細情報」→「実行」で続行）。
+- コマンドライン: `GcodeProfiler.exe "C:\Models\テスト ファイル.gcode"` でファイルを開けます
+  （空白・日本語パス対応）。
+
+## 開発・ビルド
 
 ```powershell
+# 実行（ソース）
 python -m pip install -r requirements.txt
-python app.py                 # 起動
-powershell -ExecutionPolicy Bypass -File .\build_exe.ps1   # exe ビルド
+python app.py
+python app.py --smoke-test          # 非対話の起動セルフチェック (exit 0/1)
+
+# テスト
+python -m pip install -r requirements-test.txt
+python -m pytest
+
+# ポータブル exe (dist\portable\GcodeProfiler.exe)
+powershell -ExecutionPolicy Bypass -File .\scripts\build_portable.ps1
+
+# インストーラ (dist\installer\GcodeProfiler-Setup-<version>-x64.exe)
+#   要 Inno Setup 6 (ISCC.exe)。$env:ISCC_PATH で場所を上書き可。
+powershell -ExecutionPolicy Bypass -File .\scripts\build_installer.ps1
 ```
+
+バージョンは `gcode_profiler/version.py` が唯一の真実源（exe メタデータ・インストーラ・CIで再利用）。
+リリースは `v<version>` タグ push で `release.yml` が draft リリースを作成します。
 
 ## 構成
 

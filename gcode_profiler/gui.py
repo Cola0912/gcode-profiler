@@ -222,6 +222,10 @@ class MainWindow(QMainWindow):
             "G-code / 3mf (*.gcode *.gco *.g *.nc *.3mf);;すべて (*.*)")
         if not path:
             return
+        self.open_path(path)
+
+    def open_path(self, path):
+        """Analyze the given file path (used by file dialog and CLI argument)."""
         self.gcode_path = path
         base = os.path.splitext(os.path.basename(path))[0]
         self.card_process.name_edit.setText(base)
@@ -270,21 +274,14 @@ ICON_NAME = "GCode_Profile_Reverse_Engineer.ico"
 
 
 def _icon_path():
-    """スクリプト実行 / PyInstaller 同梱 の両対応でアイコンパスを返す。"""
-    candidates = []
-    if hasattr(sys, "_MEIPASS"):
-        candidates.append(os.path.join(sys._MEIPASS, ICON_NAME))
-    here = os.path.dirname(os.path.abspath(__file__))
-    candidates.append(os.path.join(here, ICON_NAME))
-    candidates.append(os.path.join(here, "..", ICON_NAME))
-    candidates.append(os.path.join(os.getcwd(), ICON_NAME))
-    for c in candidates:
-        if os.path.exists(c):
-            return c
-    return None
+    try:
+        from .resources import resource_path
+    except ImportError:
+        from resources import resource_path
+    return resource_path(ICON_NAME)
 
 
-def main():
+def main(open_file=None):
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     ip = _icon_path()
@@ -294,6 +291,15 @@ def main():
     if ip:
         win.setWindowIcon(QIcon(ip))
     win.show()
+    # optional file passed on the command line
+    if open_file:
+        if os.path.exists(open_file):
+            try:
+                win.open_path(open_file)
+            except Exception as exc:  # noqa
+                QMessageBox.warning(win, "読み込みエラー", f"ファイルを開けませんでした:\n{exc}")
+        else:
+            QMessageBox.warning(win, "ファイルが見つかりません", f"指定パスが存在しません:\n{open_file}")
     sys.exit(app.exec())
 
 

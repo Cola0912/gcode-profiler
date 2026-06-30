@@ -1,0 +1,75 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt -r requirements-test.txt
+
+      - name: Read version
+        id: ver
+        shell: pwsh
+        run: "echo \"version=$(& ./scripts/print_version.ps1)\" >> $env:GITHUB_OUTPUT"
+
+      - name: Validate tag == canonical version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart('v')
+          if ($tag -ne "${{ steps.ver.outputs.version }}") {
+            Write-Error "tag $tag != version ${{ steps.ver.outputs.version }}"; exit 1
+          }
+
+      - name: Tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m pytest
+
+      - name: Build portable
+        shell: pwsh
+        run: |
+          $env:GP_ONEFILE = "1"
+          python -m PyInstaller --noconfirm --distpath dist/portable --workpath build GcodeProfiler.spec
+          Remove-Item Env:\GP_ONEFILE
+          Compress-Archive -Path dist/portable/GcodeProfiler.exe -DestinationPath "dist/GcodeProfiler-portable-${{ steps.ver.outputs.version }}-x64.zip" -Force
+
+      - name: Build onedir + installer
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --distpath dist/app --workpath build GcodeProfiler.spec
+          choco install innosetup --no-progress -y
+          New-Item -ItemType Directory -Force dist/installer | Out-Null
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=${{ steps.ver.outputs.version }}" installer/GcodeProfiler.iss
+
+      - name: Hashes
+        shell: pwsh
+        run: ./scripts/verify_artifacts.ps1
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: Gcode Profiler ${{ steps.ver.outputs.version }}
+          files: |
+            dist/GcodeProfiler-portable-${{ steps.ver.outputs.version }}-x64.zip
+            dist/installer/GcodeProfiler-Setup-${{ steps.ver.outputs.version }}-x64.exe
+            dist/SHA256SUMS.txt

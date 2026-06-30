@@ -6,7 +6,8 @@ __pycache__/
 # PyInstaller
 build/
 dist/
-*.spec
+build_version_info.txt
+# Note: GcodeProfiler.spec is tracked (do not ignore the maintained spec)
 
 # サンプル/テスト用 G-code は一切コミットしない(私的データ・サイズ大)
 # 合成サンプルは _make_synth.py で再生成可能

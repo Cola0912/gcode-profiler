@@ -1,0 +1,16 @@
+Gcode Profiler
+Copyright 2026 Shusei Aida
+
+This product includes software developed by Shusei Aida.
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+This application bundles third-party components at runtime (e.g. the Qt
+framework via PySide6). Those components are distributed under their own
+licenses; see THIRD_PARTY_LICENSES.md. They are not relicensed under
+Apache-2.0 by their inclusion here.
+
+Slicer names (OrcaSlicer, Bambu Studio, PrusaSlicer, SuperSlicer, Cura,
+Simplify3D) are trademarks of their respective owners and are used only to
+describe export/import compatibility. This project is not affiliated with or
+endorsed by them.

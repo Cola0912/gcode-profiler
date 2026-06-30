@@ -1,0 +1,3 @@
+# Build/packaging-only dependencies (not shipped at runtime).
+-r requirements.txt
+pyinstaller>=6.0,<7
