@@ -27,6 +27,14 @@
 
 ## インストール / 配布
 
+> **自己完結インストーラ**: `GcodeProfiler-Setup-<version>-x64.exe` は完全に自己完結しています。
+> エンドユーザーは **Inno Setup / Python / PyInstaller / pip / ソースコード / インターネット接続を一切必要としません**
+> （PyInstaller `--onedir` 出力＝Python ランタイム・Qt 一式を内包）。
+> Inno Setup は **開発/ビルド機（および CI）でインストーラを*作成*するときだけ**必要で、
+> 生成された Setup.exe には含まれず、インストール時にも実行されません。
+> ※ クリーンWindows（Python/Inno Setup 無し・ネット遮断）での検証は
+> [docs/CLEAN_MACHINE_CHECKLIST.md](docs/CLEAN_MACHINE_CHECKLIST.md) 参照（**未実施**）。
+
 - **インストーラ版**: `GcodeProfiler-Setup-<version>-x64.exe` を実行（管理者権限・x64）。
   - ユーザーデータ（設定・プロファイル・カスタム辞書）は `%LOCALAPPDATA%\GcodeProfiler` に保存され、
     アンインストールや上書きアップグレードでは**削除されません**。

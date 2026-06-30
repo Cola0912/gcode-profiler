@@ -1,6 +1,17 @@
 ; Inno Setup script for Gcode Profiler
 ; Build: iscc /DMyAppVersion=0.1.0 installer\GcodeProfiler.iss
 ; AppId must stay constant across all releases (do not regenerate).
+;
+; SELF-CONTAINED INSTALLER GUARANTEE:
+;   - Inno Setup (ISCC.exe) is a BUILD-machine tool only. It is NOT bundled and
+;     NOT required by end users.
+;   - The compiled GcodeProfiler-Setup-<version>-x64.exe embeds the COMPLETE
+;     PyInstaller --onedir output (which includes the Python runtime and Qt).
+;     End users do NOT need Python, pip, PyInstaller, Inno Setup, the project
+;     source, or an internet connection to install or run the application.
+;   - This script must never download anything, run ISCC, invoke pip/python, or
+;     compile source at INSTALL time. The only [Run] entry launches the app.
+;   - Do not add ISCC.exe / Inno Setup files to [Files].
 
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0"
