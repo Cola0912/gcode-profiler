@@ -6,6 +6,15 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Phase 2 generic analysis pipeline (`gcode_profiler/pipeline/`, additive): a
+  slicer-independent streaming parser (`parser.py`), token/fuzzy marker
+  normalization with unknown-marker collection (`markers.py`), comment-free
+  logical layer reconstruction with Z-hop/spiral handling (`layers.py`), path
+  segmentation with non-destructive ranked feature candidates and
+  purge/wipe/prime/short exclusion (`paths.py`), and an orchestrator with
+  diagnostics + legacy-compat adapter (`runner.py`). Validated on the
+  proprietary sample (outer 0.602 / inner 0.596 / infill 0.716, 49 layers).
+  9 tests. Full support/raft geometry classification deferred to Phase 3.
 - Phase 1 foundation (`gcode_profiler/canonical/`): versioned canonical value model
   (`CanonicalValue` with configured/emitted/observed/edited/target_default +
   `effective` precedence edited>configured>emitted>observed>target_default),
