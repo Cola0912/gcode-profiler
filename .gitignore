@@ -28,3 +28,6 @@ sample_synth/
 # OS
 Thumbs.db
 .DS_Store
+
+# gh 認証一時ファイル
+_gh*.txt
