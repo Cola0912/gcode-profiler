@@ -26,6 +26,9 @@ sample_synth/
 *.fff
 *.cfg
 
+# Official slicer source checkouts used only by catalog extraction tools
+.catalog_sources/
+
 # OS
 Thumbs.db
 .DS_Store

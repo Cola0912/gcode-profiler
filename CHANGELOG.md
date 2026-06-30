@@ -5,6 +5,23 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-01
+
+### Added
+- Version-aware native parameter catalog foundation:
+  `gcode_profiler/parameter_catalogs.py`, `catalog_editor.py`, generated catalog
+  filtering/grouping, coverage reports, and validation tooling.
+- OrcaSlicer 2.3 reference catalog generated from official `OrcaSlicer/OrcaSlicer`
+  `v2.3.0` `src/libslic3r/PrintConfig.cpp`: 505 native FFF/common parameters,
+  33 mapped to canonical, 472 native-only/unverified, with coverage report and
+  source references.
+- Development tools for catalog extraction/validation/diff:
+  `tools/extract_orca_parameters.py`, `validate_parameter_catalog.py`,
+  `diff_parameter_versions.py`; placeholder extractors for Bambu/Prusa/
+  SuperSlicer/Cura/Simplify3D.
+- Catalog handoff docs:
+  `docs/PARAMETER_CATALOG_SPEC.md` and `docs/ORCA_2_3_CATALOG_REPORT.md`.
+
 ## [0.3.0] - 2026-07-01
 
 ### Added
