@@ -6,6 +6,12 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Phase 1 foundation (`gcode_profiler/canonical/`): versioned canonical value model
+  (`CanonicalValue` with configured/emitted/observed/edited/target_default +
+  `effective` precedence edited>configured>emitted>observed>target_default),
+  `schema_version`, legacy<->canonical adapter, migration of legacy result dicts,
+  support/raft `path_present` separated from `setting_enabled_state`, target
+  defaults marked `application_default` (never reported as recovered). 13 tests.
 - Phase 7 packaging: `gcode_profiler/version.py` canonical version, `resources.py`
   (`resource_path`, `user_data_dir`), `--smoke-test` mode, command-line file open.
 - `GcodeProfiler.spec` (PyInstaller onedir + onefile), Windows executable metadata.

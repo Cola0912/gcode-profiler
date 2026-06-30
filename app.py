@@ -18,9 +18,11 @@ def _smoke_test():
     try:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from gcode_profiler import version, schema, exporters, analyzer, nozzle_estimator  # noqa
+        from gcode_profiler import canonical  # noqa  (Phase 1 foundation)
         from gcode_profiler.resources import resource_path
         # schema must expose the three groups
         assert set(schema.GROUPS) == {"printer", "filament", "process"}
+        assert canonical.SCHEMA_VERSION  # canonical model loads
         # exporters registry must be non-empty
         assert exporters.TARGETS
         # icon resource must resolve (best effort)
