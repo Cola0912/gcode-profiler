@@ -5,6 +5,8 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-01
+
 ### Added
 - Phase 4 conversion planning (`gcode_profiler/conversion/`, additive): explicit
   target capability registry, canonical-to-target mapping registry, conversion
