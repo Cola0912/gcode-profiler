@@ -1,6 +1,6 @@
 # G-code プロファイル復元・編集ツール
 
-スライス済み G-code を解析して**プロファイル設定を逆算復元**し、OrcaSlicer 風 UI で
+スライス済み G-code を解析して**プロファイル設定を逆算復元**し、GUI で
 編集して、各スライサーのプロファイル形式で書き出すデスクトップツール。
 
 ## できること
@@ -16,7 +16,7 @@
   ノズル/ベッド/チャンバー温度・ファン・リトラクト長/速度・Zホップ・サポート/ラフト有無。
 - **マルチフィラメント**: ツール（T0/T1…）ごとの温度・リトラクトを個別復元。
 - **G-code ブロック**: スタート / エンド / ツールチェンジ G-code を抽出。
-- **編集**: プリンター / フィラメント / プロセス の各設定を Orca 風ダイアログで編集・新規作成。
+- **編集**: プリンター / フィラメント / プロセス の各設定をダイアログで編集・新規作成。
 - **書き出し**: OrcaSlicer/BambuStudio(JSON)・PrusaSlicer/SuperSlicer(INI)・
   Simplify3D(FFF)・Cura(CFG)。
 
@@ -42,7 +42,7 @@ powershell -ExecutionPolicy Bypass -File .\build_exe.ps1   # exe ビルド
 | `gcode_profiler/schema.py` | 設定項目スキーマ（プリンター/フィラメント/プロセス） |
 | `gcode_profiler/settings_dialog.py` | スキーマ駆動の詳細設定ダイアログ |
 | `gcode_profiler/exporters.py` | 各スライサー形式へのエクスポート |
-| `gcode_profiler/gui.py` | メインウィンドウ（Orca 風カード UI） |
+| `gcode_profiler/gui.py` | メインウィンドウ（カード UI） |
 
 ## 注意
 
