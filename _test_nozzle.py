@@ -8,8 +8,8 @@ PI = math.pi
 
 
 def de_for(L, h, w, d_fil=1.75, flow=1.0, volumetric=False):
-    """目標 stadium 幅 w になる押出量 E を計算。"""
-    V = L * h * (w - h * (1 - PI / 4))
+    """目標 rectangular effective 幅 w になる押出量 E を計算 (V = w*h*L)。"""
+    V = L * h * w
     if volumetric:
         return V / flow
     area = PI * (d_fil / 2) ** 2

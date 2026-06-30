@@ -227,6 +227,19 @@ class GCodeAnalyzer:
         self.temps_by_tool: dict = defaultdict(list)       # tool -> [温度,...]
         self.bed_by_tool: dict = defaultdict(list)
         self.retract_by_tool: dict = defaultdict(list)     # tool -> [長さ,...]
+        # --- Extra raw captures for detailed recovery (recovery.py) ---
+        self.motion_limits: dict = {}          # max_accel/max_feedrate/jerk/scv (raw)
+        self.input_shaper: dict = {}           # M593 / SET_INPUT_SHAPER
+        self.object_labels: set = set()        # M486 / EXCLUDE_OBJECT
+        self.arc_count = 0
+        self.arc_radii: list = []
+        self.cur_accel: Optional[float] = None
+        self.seg_by_feature: dict = defaultdict(list)   # feature -> [(speed,length,volflow)]
+        self.accel_by_feature: dict = defaultdict(list)  # feature -> [accel,...]
+        self.fan_by_layer: dict = defaultdict(list)     # layer -> [fan_raw,...]
+        self.initial_temps: dict = {}          # tool -> first nozzle temp seen
+        self.initial_bed: Optional[float] = None
+        self.has_line_numbers = False
         self._tc_capturing = False
         self._tc_buf: list = []
         self.toolchange_gcode: list = []  # 代表的なツールチェンジ列
@@ -447,12 +460,15 @@ class GCodeAnalyzer:
                     mt2 = self.TEMP_TOOL_RE.search(cmd)
                     tool = int(mt2.group(1)) if mt2 else self.active_tool
                     self.temps_by_tool[tool].append(v)
+                    self.initial_temps.setdefault(tool, v)
         elif code in ("M140", "M190"):
             m = self.BED_RE.search(cmd)
             if m:
                 v = float(m.group(1))
                 self.bed_temps.append(v)
                 self.bed_by_tool[self.active_tool].append(v)
+                if self.initial_bed is None:
+                    self.initial_bed = v
         elif code == "M141":
             m = self.CHAMBER_RE.search(cmd)
             if m:
@@ -460,13 +476,69 @@ class GCodeAnalyzer:
         elif code == "M106":
             m = self.FAN_RE.search(cmd)
             if m:
-                self.fan_values.append(float(m.group(1)))
+                v = float(m.group(1))
+                self.fan_values.append(v)
+                self.fan_by_layer[self.cur_layer if self.cur_layer is not None else 0].append(v)
         elif code == "M107":
             self.fan_values.append(0.0)
+            self.fan_by_layer[self.cur_layer if self.cur_layer is not None else 0].append(0.0)
         elif code == "M204":
             m = self.ACCEL_RE.search(cmd)
             if m:
-                self.accels.append(float(m.group(1)))
+                a = float(m.group(1))
+                self.accels.append(a)
+                self.cur_accel = a
+        elif code == "M201":                       # Marlin 最大加速度
+            self._merge_limits("max_acceleration", self._parse_named(cmd, "XYZE"))
+        elif code == "M203":                       # Marlin 最大速度 (mm/min)
+            self._merge_limits("max_feedrate", self._parse_named(cmd, "XYZE"))
+        elif code == "M205":                       # Marlin jerk / junction
+            self._merge_limits("jerk", self._parse_named(cmd, "XYZEJ"))
+        elif code == "M566":                       # RRF jerk (mm/min)
+            self._merge_limits("jerk", self._parse_named(cmd, "XYZE"))
+        elif code == "SET_VELOCITY_LIMIT":         # Klipper
+            kw = self._parse_kw(cmd)
+            if "ACCEL" in kw:
+                self.motion_limits["accel"] = kw["ACCEL"]
+            if "SQUARE_CORNER_VELOCITY" in kw:
+                self.motion_limits["square_corner_velocity"] = kw["SQUARE_CORNER_VELOCITY"]
+            if "VELOCITY" in kw:
+                self.motion_limits["max_velocity"] = kw["VELOCITY"]
+        elif code == "M593":                       # Marlin input shaper
+            self.input_shaper["raw_m593"] = cmd
+            p = self._parse_named(cmd, "FDXY")
+            self.input_shaper.update({k.lower(): v for k, v in p.items()})
+        elif code == "SET_INPUT_SHAPER":           # Klipper input shaper
+            self.input_shaper.update({k.lower(): v for k, v in self._parse_kw(cmd).items()})
+        elif code == "M486":                       # オブジェクトラベル
+            self.object_labels.add(cmd)
+        elif code in ("EXCLUDE_OBJECT_DEFINE", "EXCLUDE_OBJECT_START", "EXCLUDE_OBJECT"):
+            self.object_labels.add(cmd)
+
+    def _parse_named(self, cmd, allowed):
+        out = {}
+        for tok in cmd.split()[1:]:
+            if tok and tok[0].upper() in allowed:
+                try:
+                    out[tok[0].upper()] = float(tok[1:])
+                except ValueError:
+                    pass
+        return out
+
+    def _parse_kw(self, cmd):
+        out = {}
+        for tok in cmd.split()[1:]:
+            if "=" in tok:
+                k, v = tok.split("=", 1)
+                try:
+                    out[k.strip().upper()] = float(v)
+                except ValueError:
+                    out[k.strip().upper()] = v.strip()
+        return out
+
+    def _merge_limits(self, key, vals):
+        if vals:
+            self.motion_limits.setdefault(key, {}).update(vals)
 
     def _parse_axes(self, cmd: str):
         out = {}
@@ -567,6 +639,9 @@ class GCodeAnalyzer:
         j = ax.get("J", 0.0)
         cx, cy = x0 + i, y0 + j
         r = math.hypot(i, j)
+        self.arc_count += 1
+        if r > 1e-9 and len(self.arc_radii) < 50000:
+            self.arc_radii.append(round(r, 3))
         if r < 1e-9:
             length = math.hypot(nx - x0, ny - y0)
         else:
@@ -622,6 +697,13 @@ class GCodeAnalyzer:
             st.widths.append(width)
         if speed > 0:
             st.speeds.append(speed)
+
+        # 詳細復元用: フィーチャ別 (速度,距離,体積流量) と加速度 (上限付き)
+        if speed > 0 and len(self.seg_by_feature[feature]) < 150000:
+            volflow = (e_delta * self.filament_area) * speed / length if length > 0 else 0.0
+            self.seg_by_feature[feature].append((speed, length, volflow))
+        if self.cur_accel is not None and len(self.accel_by_feature[feature]) < 50000:
+            self.accel_by_feature[feature].append(self.cur_accel)
 
         # 初層速度
         if layer is not None and layer == self._first_print_layer():

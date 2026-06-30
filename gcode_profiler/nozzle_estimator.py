@@ -342,15 +342,16 @@ class UncertaintyEstimator:
 # ---------------------------------------------------------------------------
 class WidthSamples:
     def __init__(self):
-        # (feature, lh) -> [(width, weight, length, volume), ...]
+        # (feature, lh) -> [(weight, length, volume, lh), ...]
+        # Width is materialized at build time with a stabilized layer height.
         self.groups = defaultdict(list)
         self.count = 0
 
-    def add(self, width, weight, feature, lh, length, volume):
+    def add(self, weight, feature, lh, length, volume):
         key = (feature, round(lh, 2))
         b = self.groups[key]
         if len(b) < MAX_SAMPLES_PER_KEY:
-            b.append((width, weight, length, volume))
+            b.append((weight, length, volume, lh))
             self.count += 1
 
 
@@ -389,10 +390,13 @@ class NozzleEstimator:
         self.tools = defaultdict(lambda: ToolState(default_filament))
         self.runtime_flow = 1.0
         self.cur_feature = "unknown"
+        self.feature_stack: list = []      # ;Marker enter/exit stack (proprietary style)
         self.height_comment = None
         self.last_ext_z = None
         self.derived_lh = None
         self._lh_source = "assumed"
+        self.print_z_set: set = set()      # distinct extrusion Z for stable layer height
+        self._constant_layer = True
         # 集計
         self.samples = defaultdict(WidthSamples)
         self.excluded = defaultdict(int)
@@ -446,18 +450,39 @@ class NozzleEstimator:
         m = self.TYPE_COMMENT.match(line) or self.FEATURE_WORD.match(line)
         if m:
             self.cur_feature = classify_feature(m.group(1)) or "unknown"
-        else:
-            mk = self.MARKER_COMMENT.search(line)
-            if mk:
-                f = classify_feature(mk.group(1))
-                if f:
-                    self.cur_feature = f
+        elif ";marker" in line.lower():
+            self._handle_marker_stack(line)
         if "arachne" in line.lower():
             self.arachne_hint = True
         pav = _pa_from_comment(line)
         if pav is not None:
             self.pa.apply_comment(self.active_tool, pav)
             self.pressure_advance = self.pa.any_active()
+
+    def _handle_marker_stack(self, line):
+        """Proprietary ';Marker <Name> <1|0> | ...' enter/exit stack.
+        Mirrors analyzer scoping so infill is not attributed to the wall feature."""
+        payload = line.split("Marker", 1)[1] if "Marker" in line else line
+        for token in payload.split("|"):
+            parts = token.split()
+            if len(parts) < 2:
+                continue
+            name, state = parts[0], parts[-1]
+            if name.lower() == "layer":
+                continue
+            if state == "1":
+                self.feature_stack.append(name)
+            elif state == "0":
+                for i in range(len(self.feature_stack) - 1, -1, -1):
+                    if self.feature_stack[i] == name:
+                        del self.feature_stack[i]
+                        break
+        self.cur_feature = "unknown"
+        for nm in reversed(self.feature_stack):
+            f = classify_feature(nm)
+            if f:
+                self.cur_feature = f
+                break
 
     def _command(self, cmd):
         head = cmd.split()[0].upper()
@@ -606,12 +631,15 @@ class NozzleEstimator:
         self._since_retract += 1
         self._since_tool += 1
 
+        if nz > 0:
+            self.print_z_set.add(round(nz, 3))
         if (length < self.min_segment_len or abs(dz) > self.max_dz
                 or self.cur_feature in EXCLUDED_FEATURES or volume <= 0):
             self.excluded[self.active_tool] += 1
             return
-        w = line_width(volume, length, lh)
-        if w is None or not (0.05 < w < 3.0) or math.isnan(w) or math.isinf(w):
+        # Validity check on rectangular effective width (stadium applied later if chosen)
+        w_rect = volume / (length * lh)
+        if not (0.05 < w_rect < 3.0) or math.isnan(w_rect) or math.isinf(w_rect):
             self.excluded[self.active_tool] += 1
             return
         weight = SegmentReliabilityScorer.score(
@@ -619,7 +647,8 @@ class NozzleEstimator:
         if weight <= 0:
             self.excluded[self.active_tool] += 1
             return
-        self.samples[self.active_tool].add(w, weight, self.cur_feature, lh, length, volume)
+        # Store raw (weight, length, volume, lh); width materialized at build with stable lh.
+        self.samples[self.active_tool].add(weight, self.cur_feature, lh, length, volume)
 
     def _layer_height(self, z):
         if self.height_comment and self.height_comment > 0:
@@ -674,13 +703,43 @@ class NozzleEstimator:
                           "ノズル径や実測線幅を保証するものではない。",
         }
 
+    def _stable_lh(self):
+        """Global modal layer height from distinct extrusion-Z deltas.
+        Sets self._constant_layer if one delta dominates."""
+        zs = sorted(self.print_z_set)
+        diffs = [round(b - a, 3) for a, b in zip(zs, zs[1:]) if 0.01 < (b - a) < 2.0]
+        if not diffs:
+            self._constant_layer = False
+            return None
+        counts = defaultdict(int)
+        for d in diffs:
+            counts[d] += 1
+        modal = max(counts.items(), key=lambda kv: kv[1])
+        self._constant_layer = modal[1] / len(diffs) > 0.6
+        return modal[0]
+
     def _build_tool(self, tool):
         ws = self.samples.get(tool, WidthSamples())
         ts = self.tools[tool]
-        # 外れ値除去(グループごとに MAD, 重みも維持) §14
+        stable_lh = self._stable_lh()
+
+        def materialize(raw):
+            # raw: [(weight, length, volume, lh_parse)] -> [(w_rect, weight, length, volume, lh)]
+            out = []
+            for weight, length, volume, lh_parse in raw:
+                # per-path/layer height > stable global modal (snap when constant-layer)
+                lh = stable_lh if (self._constant_layer and stable_lh) else lh_parse
+                if not lh or lh <= 0:
+                    continue
+                w = volume / (length * lh)   # rectangular effective width (primary)
+                if 0.05 < w < 3.0:
+                    out.append((w, weight, length, volume, lh))
+            return out
+
+        # MAD outlier rejection per (feature, layer-height) group, weights kept
         filt = {}
         for key, samples in ws.groups.items():
-            filt[key] = _mad_filter(samples)
+            filt[key] = _mad_filter(materialize(samples))
         all_s = [s for lst in filt.values() for s in lst]
         feat_s = defaultdict(list)
         for (feat, _lh), lst in filt.items():
@@ -689,7 +748,8 @@ class NozzleEstimator:
         widths = [s[0] for s in all_s]
         dist = LineWidthDistributionAnalyzer(all_s, feat_s)
         stats = dist.statistics()
-        rep, rep_method = dist.representative()
+        rep, rep_method, rep_feat, from_wall = dist.representative()
+        lh_used = stable_lh if (self._constant_layer and stable_lh) else None
         meta_nozzle = self.meta.nozzle_diameter.get(tool)
         if meta_nozzle is None and len(self.meta.nozzle_diameter) == 1:
             meta_nozzle = next(iter(self.meta.nozzle_diameter.values()))
@@ -701,11 +761,28 @@ class NozzleEstimator:
         variable = bool(self.arachne_hint or (cv > 0.20 and len(peaks) <= 2)
                         or (stats and stats["sample_count"] >= 50 and cv > 0.25))
 
-        # 不確かさ (§4/§5)
+        # 不確かさ (§4/§5)。代表は壁優先・距離加重・矩形 effective 幅。
         outer = feat_s.get("outer_wall", [])
+        inner = feat_s.get("inner_wall", [])
+        sparse = feat_s.get("sparse_infill", [])
         rep_L = statistics.median([s[2] for s in (outer or all_s)]) if (outer or all_s) else None
-        rep_lh = _mode_hist([round(k[1], 2) for k in filt.keys() for _ in filt[k]]) or (lh_max or 0.2)
-        layer_assumed = (self._lh_source == "assumed")
+        rep_lh = lh_used or stable_lh or (lh_max or 0.2)
+        layer_assumed = lh_used is None
+        if not from_wall:
+            warn_wall = "壁サンプル不足のため非壁フィーチャから代表幅を採用(信頼度低下)"
+        else:
+            warn_wall = None
+        # diagnostics: distance-weighted rectangular effective width per feature
+        def eff_w(lst):
+            if not lst:
+                return None
+            return round(_weighted_median([s[0] for s in lst], [s[1] * s[2] for s in lst]), 3)
+        feature_effective_widths = {
+            "outer_wall": eff_w(outer), "inner_wall": eff_w(inner),
+            "sparse_infill": eff_w(sparse), "top_surface": eff_w(feat_s.get("top_surface", [])),
+        }
+        stadium_secondary = (round(rep + rep_lh * (1 - PI / 4), 3)
+                             if (rep and rep_lh) else None)
         uncertainty = None
         if rep and rep_L:
             uncertainty = self.uncert.propagate(rep, rep_L, rep_lh, ts.filament_diameter,
@@ -725,6 +802,8 @@ class NozzleEstimator:
         high_conf = [s for s in all_s if s[1] >= 0.7]
         confidence = self._confidence(best, second, meta_nozzle, stats, outer, ts,
                                       lh_max, variable, cv, len(high_conf))
+        if not from_wall:
+            confidence = int(confidence * 0.7)
         errors = ErrorSourceDetector.detect(self, ts, stats, cv, variable, layer_assumed)
         grade = _quality_grade(stats, len(high_conf), len(outer),
                                ts.filament_diameter_source != "default",
@@ -743,9 +822,16 @@ class NozzleEstimator:
             "filament_diameter_source": ts.filament_diameter_source,
             "volumetric_extrusion": ts.volumetric_mode,
             "pressure_advance": self.pa.summary(tool),
-            "theoretical_line_width": True,
+            "cross_section_model": "rectangular_effective",
             "representative_line_width": _r(rep, 3),
             "representative_method": rep_method,
+            "representative_feature": rep_feat,
+            "representative_from_wall": from_wall,
+            "feature_effective_widths": feature_effective_widths,
+            "stadium_width_secondary": stadium_secondary,
+            "layer_height_used": _r(rep_lh, 3),
+            "layer_height_constant": self._constant_layer,
+            "sample_unit": "extrusion_segment",
             "line_width_uncertainty": uncertainty,
             "line_width_statistics": stats,
             "minimum_layer_height": _r(lh_min, 3),
@@ -948,21 +1034,37 @@ class LineWidthDistributionAnalyzer:
         }
 
     def representative(self):
-        # 高信頼外周の重み付き最頻値 > 重み付き中央値 > 通常押出ピーク > 全体中央値
-        for feat in ("outer_wall", "inner_wall", "sparse_infill", "solid_infill"):
+        """Wall-priority, distance-weighted representative width.
+        Returns (width, method, feature, from_wall). Infill/support must not
+        dominate: walls preferred; long stable segments preferred; weight=len*reliability."""
+        MIN = 5
+        WALL_PRIORITY = ("outer_wall", "inner_wall", "top_surface", "solid_infill")
+        for feat in WALL_PRIORITY:
             lst = self.feat.get(feat)
-            if lst and len(lst) >= 5:
+            if not lst:
+                continue
+            longs = [s for s in lst if s[2] >= 2.0]   # long stable segments
+            use = longs if len(longs) >= MIN else (lst if len(lst) >= MIN else None)
+            if use:
+                widths = [s[0] for s in use]
+                weights = [s[1] * s[2] for s in use]   # reliability * distance
+                wm = _weighted_mode(widths, weights) or _weighted_median(widths, weights)
+                tag = "_long" if len(longs) >= MIN else ""
+                from_wall = feat in ("outer_wall", "inner_wall")
+                return wm, f"weighted_{feat}_mode{tag}", feat, from_wall
+        # Fallback: only infill/support exist -> low confidence, must not over-pick large nozzle
+        for feat in ("sparse_infill", "support", "raft"):
+            lst = self.feat.get(feat)
+            if lst and len(lst) >= MIN:
                 widths = [s[0] for s in lst]
-                weights = [s[1] for s in lst]
-                wm = _weighted_mode(widths, weights)
-                if wm is not None:
-                    method = ("weighted_external_perimeter_mode" if feat == "outer_wall"
-                              else f"weighted_{feat}_mode")
-                    return wm, method
+                weights = [s[1] * s[2] for s in lst]
+                return (_weighted_mode(widths, weights) or _weighted_median(widths, weights),
+                        f"weighted_{feat}_fallback", feat, False)
         if self.all:
             widths = [s[0] for s in self.all]
-            return (_mode_hist(widths) or statistics.median(widths)), "global_mode"
-        return None, "none"
+            weights = [s[1] * s[2] for s in self.all]
+            return _weighted_median(widths, weights), "global_fallback", None, False
+        return None, "none", None, False
 
     def peaks(self):
         return _find_peaks([s[0] for s in self.all])
