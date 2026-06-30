@@ -23,11 +23,13 @@ try:
     from .analyzer import analyze
     from . import schema as sc
     from . import exporters
+    from . import export_flow
     from .settings_dialog import SettingsDialog
 except ImportError:
     from analyzer import analyze
     import schema as sc
     import exporters
+    import export_flow
     from settings_dialog import SettingsDialog
 
 
@@ -165,7 +167,8 @@ class MainWindow(QMainWindow):
 
         exp = QHBoxLayout()
         exp.addWidget(QLabel("出力先:"))
-        self.target_combo = QComboBox(); self.target_combo.addItems(list(exporters.TARGETS.keys()))
+        self.target_combo = QComboBox()
+        self.target_combo.addItems([d for d, _id in export_flow.TARGET_CHOICES])
         exp.addWidget(self.target_combo, 1)
         self.btn_export = QPushButton("プロファイル書き出し"); self.btn_export.setObjectName("accent")
         self.btn_export.clicked.connect(self.on_export)
@@ -250,24 +253,59 @@ class MainWindow(QMainWindow):
     def on_export(self):
         result = self.model.to_result()
         name = self.card_process.name_edit.text().strip() or "Recovered Profile"
-        target = self.target_combo.currentText()
+        display = self.target_combo.currentText()
+        target = export_flow.target_id(display)
+        # 1) build conversion plan and show a preview (Phase 4/5 pipeline)
         try:
-            files = exporters.export(result, name, target,
-                                     printer_name=self.card_printer.name_edit.text().strip(),
-                                     filament_name=self.card_filament.name_edit.text().strip())
+            _prof, plan = export_flow.build_plan_from_legacy(result, target)
+        except Exception as exc:  # noqa
+            QMessageBox.critical(self, "変換エラー", str(exc)); return
+        pv = export_flow.preview(plan)
+        msg = (f"変換スコア: {pv['conversion_score']}\n"
+               f"確定 {pv['ready']} / 導出 {pv['derived']} / "
+               f"未対応 {pv['unsupported']} / 競合 {pv['conflict']}\n"
+               f"要ユーザー入力: {len(pv['required_user_inputs'])} 件"
+               + (f"（うち重大 {len(pv['critical_inputs'])}）" if pv['has_critical'] else ""))
+        if pv["has_critical"]:
+            crit = "\n".join(f"・{r['canonical_key']}: {r['reason']}" for r in pv["critical_inputs"])
+            ans = QMessageBox.warning(
+                self, "重大な必須入力が未解決",
+                msg + "\n\n重大な項目が未確定です（エキスパート上書きで続行可）:\n" + crit
+                + "\n\n続行しますか？",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if ans != QMessageBox.Yes:
+                return
+            for r in plan["required_user_inputs"]:
+                r["safety_level"] = "important"  # expert override: unblock writer
+        else:
+            ans = QMessageBox.question(self, "変換プレビュー", msg + "\n\n書き出しますか？",
+                                       QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            if ans != QMessageBox.Yes:
+                return
+        # 2) native write
+        try:
+            wres = export_flow.write_native(plan, name=name)
         except Exception as exc:  # noqa
             QMessageBox.critical(self, "書き出しエラー", str(exc)); return
+        if wres.blocked:
+            crit = "\n".join(f"・{r.get('canonical_key')}" for r in wres.required_user_inputs)
+            QMessageBox.critical(self, "書き出しをブロックしました",
+                                 "重大な必須入力が未解決のため出力できません:\n" + crit)
+            return
         folder = QFileDialog.getExistingDirectory(self, "出力先フォルダを選択")
         if not folder:
             return
         written = []
-        for fname, content in files:
+        for fname, content in wres.files:
             with open(os.path.join(folder, fname), "w", encoding="utf-8") as fh:
                 fh.write(content)
             written.append(fname)
+        extra = (f"\n\n未対応 {len(wres.unsupported)} 項目（ターゲット非対応）"
+                 if wres.unsupported else "")
         QMessageBox.information(self, "完了",
-                               f"{target} 形式で書き出しました:\n\n" + "\n".join(written))
-        self.statusBar().showMessage(f"{target} へ {len(written)} ファイル書き出し完了")
+                               f"{display} 形式で書き出しました:\n\n" + "\n".join(written) + extra)
+        self.statusBar().showMessage(f"{display} へ {len(written)} ファイル書き出し完了"
+                                     f"（スコア {pv['conversion_score']}）")
 
 
 ICON_NAME = "GCode_Profile_Reverse_Engineer.ico"

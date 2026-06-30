@@ -134,9 +134,13 @@ File:
 
 ## Next work
 
-1. Connect GUI export flow to `conversion.build_plan()` + `writers.write_native()`.
-2. Keep old `exporters.py` as a compatibility wrapper.
+1. ~~Connect GUI export flow to `conversion.build_plan()` + `writers.write_native()`.~~
+   DONE in v0.4.1 via `gcode_profiler/export_flow.py` (preview + critical-input block).
+2. Keep old `exporters.py` as a compatibility wrapper. (retained)
 3. Add snapshot tests for richer plans.
 4. Add target-native schema validation using parameter catalogs.
-5. Add same-slicer native-only preservation after native import is implemented.
+5. Add same-slicer native-only preservation after native import is implemented (Phase 6).
+6. Carry G-code start/end/toolchange blocks and extra machine fields through the
+   canonical mapping so the native writers can emit them (currently only the
+   registry-mapped subset is written).
 

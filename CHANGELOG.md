@@ -5,6 +5,18 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-01
+
+### Added
+- Phase 5 completion: GUI export flow now runs through the canonical pipeline
+  (`gcode_profiler/export_flow.py`): legacy model result -> `canonical.legacy_to_canonical`
+  -> `conversion.build_plan(target)` -> `writers.write_native(plan)`. The export
+  target list is the six native writers (Orca/Bambu/Prusa/SuperSlicer/Cura/Simplify3D);
+  a conversion preview (score, ready/derived/unsupported/conflict counts, required
+  user inputs) is shown before writing, critical unresolved inputs block the writer
+  (with explicit expert-override), and target-default values are not written as
+  recovered. Legacy `exporters.py` is retained for compatibility. 5 tests.
+
 ## [0.4.0] - 2026-07-01
 
 ### Added
