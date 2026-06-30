@@ -28,7 +28,8 @@ Write-Host "smoke-test OK"
 $iscc = $env:ISCC_PATH
 if (-not $iscc) {
     foreach ($c in @("C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
-                     "C:\Program Files\Inno Setup 6\ISCC.exe")) {
+                     "C:\Program Files\Inno Setup 6\ISCC.exe",
+                     "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe")) {
         if (Test-Path $c) { $iscc = $c; break }
     }
 }
