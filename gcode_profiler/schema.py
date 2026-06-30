@@ -131,16 +131,19 @@ PRINTER = [
     SubTab("プリンタG-code", special="gcode"),
     SubTab("Multimaterial", special="filaments"),
     SubTab("移動能力", [
+        # NOTE: Machine motion limits must come from explicit M201/M203/M205/M566/
+        # SET_VELOCITY_LIMIT only (see analyzer.motion_limits). Process acceleration
+        # and travel speed must NOT populate these printer-capability fields.
         ("最大加速度", [
-            Field("machine.max_accel_x", "X", "mm/s²", src="speed.outer_wall_accel"),
-            Field("machine.max_accel_y", "Y", "mm/s²", src="speed.outer_wall_accel"),
-            Field("machine.max_accel_z", "Z", "mm/s²", default=500),
-            Field("machine.max_accel_e", "E", "mm/s²", default=5000),
+            Field("machine.max_accel_x", "X", "mm/s²", src="machine.max_accel_x"),
+            Field("machine.max_accel_y", "Y", "mm/s²", src="machine.max_accel_y"),
+            Field("machine.max_accel_z", "Z", "mm/s²", src="machine.max_accel_z"),
+            Field("machine.max_accel_e", "E", "mm/s²", src="machine.max_accel_e"),
         ]),
         ("最大速度", [
-            Field("machine.max_speed_x", "X", "mm/s", src="speed.travel_speed"),
-            Field("machine.max_speed_y", "Y", "mm/s", src="speed.travel_speed"),
-            Field("machine.max_speed_z", "Z", "mm/s", default=20),
+            Field("machine.max_speed_x", "X", "mm/s", src="machine.max_speed_x"),
+            Field("machine.max_speed_y", "Y", "mm/s", src="machine.max_speed_y"),
+            Field("machine.max_speed_z", "Z", "mm/s", src="machine.max_speed_z"),
         ]),
     ]),
     SubTab("Notes", [
