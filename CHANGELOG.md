@@ -5,6 +5,8 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-01
+
 ### Added
 - Phase 3 auxiliary-structure classification (`pipeline/regions.py`, `pipeline/aux.py`):
   per-layer region model + bounded adjacent-layer vertical overlap graph; marker-led
