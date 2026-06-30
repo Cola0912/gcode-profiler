@@ -35,13 +35,13 @@ if (-not $iscc) {
 }
 if (-not $iscc -or -not (Test-Path $iscc)) {
     Write-Host ""
-    Write-Host "ISCC.exe (Inno Setup 6) が見つかりません。" -ForegroundColor Red
-    Write-Host "Inno Setup はインストーラを*作成*するビルド機専用ツールです。" -ForegroundColor Yellow
-    Write-Host "エンドユーザーには不要で、生成される Setup.exe には含まれません。" -ForegroundColor Yellow
-    Write-Host "対処: 次のいずれか" -ForegroundColor Yellow
+    Write-Host "ISCC.exe (Inno Setup 6) not found." -ForegroundColor Red
+    Write-Host "Inno Setup is a BUILD-machine tool used only to CREATE the installer." -ForegroundColor Yellow
+    Write-Host "End users do not need it; it is not bundled into the generated Setup.exe." -ForegroundColor Yellow
+    Write-Host "Resolve with one of:" -ForegroundColor Yellow
     Write-Host "  1) winget install --id JRSoftware.InnoSetup -e" -ForegroundColor Yellow
-    Write-Host "  2) https://jrsoftware.org/isdl.php からインストール" -ForegroundColor Yellow
-    Write-Host "  3) `$env:ISCC_PATH に ISCC.exe のパスを設定" -ForegroundColor Yellow
+    Write-Host "  2) install from https://jrsoftware.org/isdl.php" -ForegroundColor Yellow
+    Write-Host '  3) set $env:ISCC_PATH to the full path of ISCC.exe' -ForegroundColor Yellow
     exit 1
 }
 
