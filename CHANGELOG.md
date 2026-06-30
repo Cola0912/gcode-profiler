@@ -6,6 +6,16 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Phase 3 auxiliary-structure classification (`pipeline/regions.py`, `pipeline/aux.py`):
+  per-layer region model + bounded adjacent-layer vertical overlap graph; marker-led
+  (with light geometry) classification of support/interface, raft (layer_count from
+  actually-classified layers), brim, skirt, purge line, purge tower (fixed-XY repeated
+  layers), wipe, and unknown_auxiliary. `path_present` (observed) is strictly separated
+  from `setting_enabled_state` (always unknown without metadata); legacy
+  `has_support`/`has_raft` are True only when present, else null. Canonical outputs
+  under `process.support.*` / `process.others.*` / `process.multimaterial.*`. 6 tests;
+  validated on proprietary sample (support present, raft layer_count=2). Tree/organic
+  support parameter extraction deferred.
 - Phase 2 generic analysis pipeline (`gcode_profiler/pipeline/`, additive): a
   slicer-independent streaming parser (`parser.py`), token/fuzzy marker
   normalization with unknown-marker collection (`markers.py`), comment-free
