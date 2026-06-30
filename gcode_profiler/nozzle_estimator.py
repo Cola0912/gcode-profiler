@@ -715,7 +715,7 @@ class NozzleEstimator:
         # 候補スコアリング(区間重複 §10 を含む)
         candidates = []
         for d in self.nozzles:
-            sc = self._score(d, rep, stats, widths, outer, lh_max, meta_nozzle, ci)
+            sc = self._score(d, rep, stats, widths, outer, lh_max, meta_nozzle, ci, variable)
             candidates.append({"diameter": d, "score": round(sc, 4)})
         candidates.sort(key=lambda c: c["score"], reverse=True)
         top = candidates[:3]
@@ -771,11 +771,30 @@ class NozzleEstimator:
         }
 
     # ------------------------------------------------------------------
-    def _score(self, d, rep, stats, widths, outer, lh_max, meta_nozzle, ci):
+    @staticmethod
+    def _line_width_score(r):
+        """ライン幅比 r=w/d のスコア(区分式)。
+        ライン幅がノズル径より小さい(r<0.85)候補を過大評価しない。"""
+        if 0.90 <= r <= 1.30:
+            return math.exp(-((r - 1.05) / 0.18) ** 2)   # 高得点(中心1.05)
+        if 0.85 <= r < 0.90:
+            return 0.55                                   # 減点
+        if 0.80 <= r < 0.85:
+            return 0.35
+        if 0.70 <= r < 0.80:
+            return 0.18                                   # 大幅減点
+        if r < 0.70:
+            return 0.05                                   # 原則低順位
+        if 1.30 < r <= 1.60:
+            return 0.45                                   # 太めだが可能
+        return 0.10                                       # r>1.60
+
+    def _score(self, d, rep, stats, widths, outer, lh_max, meta_nozzle, ci, variable=False):
         lw = 0.0
+        r = None
         if rep and d > 0:
             r = rep / d
-            lw = math.exp(-((r - 1.05) / 0.20) ** 2)
+            lw = self._line_width_score(r)
         lhs = 0.5
         if lh_max and d > 0:
             rh = lh_max / d
@@ -810,7 +829,18 @@ class NozzleEstimator:
             parts = [(lw, 0.38), (lhs, 0.16), (dscore, 0.12), (overlap, 0.10),
                      (meta, 0.15), (feat, 0.04)]
         tot = sum(wt for _v, wt in parts)
-        return sum(v * wt for v, wt in parts) / tot
+        score = sum(v * wt for v, wt in parts) / tot
+
+        # 過大径の抑制: ライン幅 < ノズル径(r<0.85)の候補は、
+        # メタデータ一致も可変線幅も無い限り第一候補にしない (§ユーザー指定)
+        if r is not None and r < 0.85 and meta is None and not variable:
+            if r < 0.70:
+                score *= 0.25
+            elif r < 0.80:
+                score *= 0.45
+            else:  # 0.80–0.85
+                score *= 0.65
+        return score
 
     def _confidence(self, best, second, meta_nozzle, stats, outer, ts, lh_max,
                     variable, cv, high_conf_count):
