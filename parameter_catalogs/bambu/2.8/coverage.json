@@ -1,0 +1,17 @@
+{
+  "native_parameters_found": 567,
+  "catalog_parameters": 567,
+  "mapped_to_canonical": 33,
+  "native_only": 534,
+  "deprecated": 0,
+  "unverified": 534,
+  "coverage_percent": 100.0,
+  "discovered": 567,
+  "verified": 0,
+  "partially_verified": 33,
+  "mapped": 33,
+  "editable": 567,
+  "exportable": 567,
+  "importable": 567,
+  "recoverable_from_gcode": 33
+}

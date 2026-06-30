@@ -10,6 +10,7 @@ from tools.validate_parameter_catalog import validate
 
 
 CATALOG = Path("parameter_catalogs/orca/2.3/parameters.json")
+BAMBU_CATALOG = Path("parameter_catalogs/bambu/2.8/parameters.json")
 
 
 def test_orca_catalog_loads_and_reports_coverage():
@@ -20,6 +21,15 @@ def test_orca_catalog_loads_and_reports_coverage():
     assert cat["coverage"]["catalog_parameters"] == 505
     assert cat["coverage"]["mapped_to_canonical"] >= 30
     assert cat["coverage"]["native_only"] > 400
+
+
+def test_bambu_catalog_loads_as_separate_target_catalog():
+    cat = load_catalog("bambu", "2.8")
+    assert cat["slicer"] == "Bambu Studio"
+    assert cat["version"] == "2.8"
+    assert len(cat["parameters"]) == 567
+    assert cat["coverage"]["mapped_to_canonical"] >= 30
+    assert cat["coverage"]["native_only"] > 500
 
 
 def test_orca_catalog_has_no_duplicate_native_keys():
@@ -93,6 +103,8 @@ def test_catalog_list_exposes_orca_23():
     cats = list_catalogs()
     assert "orca" in cats
     assert "2.3" in cats["orca"]
+    assert "bambu" in cats
+    assert "2.8" in cats["bambu"]
 
 
 def test_coverage_json_matches_embedded_coverage():
@@ -100,3 +112,14 @@ def test_coverage_json_matches_embedded_coverage():
     separate = json.loads(Path("parameter_catalogs/orca/2.3/coverage.json").read_text(encoding="utf-8"))
     assert separate == embedded
 
+
+def test_bambu_catalog_validator_accepts_generated_catalog():
+    assert validate(BAMBU_CATALOG) == []
+
+
+def test_bambu_and_orca_are_not_the_same_catalog():
+    orca = json.loads(CATALOG.read_text(encoding="utf-8"))["parameters"]
+    bambu = json.loads(BAMBU_CATALOG.read_text(encoding="utf-8"))["parameters"]
+    orca_keys = {p["native_key"] for p in orca}
+    bambu_keys = {p["native_key"] for p in bambu}
+    assert len(bambu_keys - orca_keys) > 0

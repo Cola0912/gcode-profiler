@@ -16,9 +16,13 @@ parameter_catalogs/
     2.3/
       parameters.json
       coverage.json
+  bambu/
+    2.8/
+      parameters.json
+      coverage.json
 ```
 
-今は OrcaSlicer 2.3 の reference catalog のみ実装済み。
+現在は OrcaSlicer 2.3 と Bambu Studio 2.8 の reference catalog が実装済み。
 
 ## Parameter schema
 
@@ -102,9 +106,8 @@ tools/diff_parameter_versions.py
 
 ## 現在の制限
 
-- OrcaSlicer 2.3 は `PrintConfig.cpp` から抽出した factual catalog。
+- OrcaSlicer 2.3 / Bambu Studio 2.8 は `PrintConfig.cpp` から抽出した factual catalog。
 - UI grouping は source の `category/mode` と heuristic `section` の混合で、完全な native UI reproduction ではない。
 - dependencies はまだ未抽出（空配列）。
 - native-only は import/edit/same-slicer export の対象だが cross-slicer mapping には使わない。
 - current GUI はまだ固定 schema を使う。catalog-driven GUI は次の実装で接続する。
-

@@ -5,6 +5,16 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-07-01
+
+### Added
+- Bambu Studio 2.8 reference catalog generated from official `bambulab/BambuStudio`
+  `v02.08.00.50` `src/libslic3r/PrintConfig.cpp`: 567 native FFF/common
+  parameters, 33 mapped to canonical, 534 native-only/unverified, with diff
+  report against OrcaSlicer 2.3.
+- `tools/extract_bambu_parameters.py` implemented.
+- `docs/BAMBU_2_8_CATALOG_REPORT.md`.
+
 ## [0.3.1] - 2026-07-01
 
 ### Added
