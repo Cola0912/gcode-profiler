@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# サンプル/テスト用 G-code は一切コミットしない(私的データ・サイズ大)
+# 合成サンプルは _make_synth.py で再生成可能
+sample_gcode/
+sample_synth/
+*.gcode
+*.3mf
+*.rcodex
+*.stl
+*.xlsx
+
+# エクスポート出力物
+*.process.json
+*.machine.json
+*.filament.json
+*.fff
+*.cfg
+
+# OS
+Thumbs.db
+.DS_Store
