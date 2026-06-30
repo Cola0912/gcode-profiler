@@ -5,10 +5,19 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Phase 4 conversion planning (`gcode_profiler/conversion/`, additive): explicit
+  target capability registry, canonical-to-target mapping registry, conversion
+  plan engine, required-user-input detection, conversion score, value-layer
+  preservation (`configured`/`emitted`/`observed`/`edited`/`target_default`),
+  preview grouping, enum translation, derived percentage conversion,
+  one-to-many and many-to-one conversion annotations. Native target serialization
+  remains Phase 5. 14 tests.
+
 ## [0.2.0] - 2026-07-01
 
 ### Added
-- Phase 3 auxiliary-structure classification (`pipeline/regions.py`, `pipeline/aux.py`):
+- Phase 3 auxiliary-structure classification (`pipeline/regions.py`, `pipeline/auxiliary.py`):
   per-layer region model + bounded adjacent-layer vertical overlap graph; marker-led
   (with light geometry) classification of support/interface, raft (layer_count from
   actually-classified layers), brim, skirt, purge line, purge tower (fixed-XY repeated
@@ -57,9 +66,11 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
   unknown unless emitted via M201/M203/M205/M566/SET_VELOCITY_LIMIT.
 
 ### Known limitations (deferred)
-- Phase 2–6, 8 architecture (generic parser pipeline, canonical conversion
-  engine, separate native importers/writers, performance/cache layer) is
-  specified but not yet implemented in this release.
+- Phase 4 conversion planning is not part of v0.2.0; it is currently in
+  Unreleased on `main`.
+- Phase 5–6, 8 architecture (separate native importers/writers,
+  semantic round-trip validation, performance/cache layer) is specified but not
+  yet implemented in this release.
 - Slicer profile exports are verified against synthetic fixtures only; they have
   not been imported into the native slicer applications.
 
