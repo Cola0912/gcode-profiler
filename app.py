@@ -22,12 +22,14 @@ def _smoke_test():
         from gcode_profiler import pipeline  # noqa  (Phase 2 generic analysis)
         from gcode_profiler import conversion  # noqa  (Phase 4 conversion planning)
         from gcode_profiler import parameter_catalogs  # noqa
+        from gcode_profiler import writers  # noqa
         from gcode_profiler.resources import resource_path
         # schema must expose the three groups
         assert set(schema.GROUPS) == {"printer", "filament", "process"}
         assert canonical.SCHEMA_VERSION  # canonical model loads
         assert conversion.TARGETS        # conversion registry loads
         assert "orca" in parameter_catalogs.list_catalogs()
+        assert writers.WRITERS
         # exporters registry must be non-empty
         assert exporters.TARGETS
         # icon resource must resolve (best effort)

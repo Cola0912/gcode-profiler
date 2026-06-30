@@ -5,6 +5,16 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-01
+
+### Added
+- Phase 5 target-native writer foundation:
+  `gcode_profiler/writers/` with separate writer modules for OrcaSlicer, Bambu
+  Studio, PrusaSlicer, SuperSlicer, Cura, and Simplify3D. Writers consume
+  canonical conversion plans (not legacy result dicts), block unresolved critical
+  inputs, skip `target_default` values, and preserve unsupported entry reporting.
+  6 writer tests.
+
 ## [0.3.2] - 2026-07-01
 
 ### Added
