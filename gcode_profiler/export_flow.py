@@ -39,6 +39,11 @@ def build_plan_from_legacy(legacy_result, target):
     return prof, build_plan(prof, target_id(target))
 
 
+def build_plan_from_canonical(profile, target):
+    """canonical profile -> (canonical_profile, conversion_plan)."""
+    return profile, build_plan(profile, target_id(target))
+
+
 def preview(plan):
     """Human-facing summary of a conversion plan for the export confirmation UI."""
     entries = plan.get("entries", [])

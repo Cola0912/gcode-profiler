@@ -37,6 +37,10 @@ _SPEEDS = ["outer_wall", "inner_wall", "sparse_infill", "top_surface", "support"
 
 # --- OrcaSlicer (and BambuStudio share the same key vocabulary; separate entry) ---
 _ORCA = {
+    "printer.basic_information.bed_shape": _m("rename", ["printable_area"],
+                                              profile_kind="printer", value_mode="text"),
+    "printer.basic_information.printable_height": _m("rename", ["printable_height"],
+                                                     "mm", profile_kind="printer"),
     "printer.firmware.gcode_flavor": _m("enum", ["gcode_flavor"], profile_kind="printer", value_mode="enum"),
     "process.quality.layer_height": _m("exact", ["layer_height"], "mm"),
     "process.quality.initial_layer_height": _m("rename", ["initial_layer_print_height"], "mm"),
@@ -66,6 +70,10 @@ for f in ["outer_wall", "inner_wall", "sparse_infill", "top_surface", "support"]
 
 # --- PrusaSlicer (SuperSlicer shares most; separate entry) ---
 _PRUSA = {
+    "printer.basic_information.bed_shape": _m("rename", ["bed_shape"],
+                                              profile_kind="printer", value_mode="text"),
+    "printer.basic_information.printable_height": _m("rename", ["max_print_height"],
+                                                     "mm", profile_kind="printer"),
     "printer.firmware.gcode_flavor": _m("enum", ["gcode_flavor"], profile_kind="printer", value_mode="enum"),
     "process.quality.layer_height": _m("exact", ["layer_height"], "mm"),
     "process.quality.initial_layer_height": _m("rename", ["first_layer_height"], "mm"),

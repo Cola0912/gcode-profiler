@@ -47,6 +47,9 @@ def test_orca_writer_outputs_profile_subtype_files_from_plan():
     fil = json.loads(_content(result, ".filament.json"))
     assert fil["nozzle_temperature"] == ["220"]
     assert "fan_max_speed" not in fil  # target_default is not a recovered value
+    machine = json.loads(_content(result, ".machine.json"))
+    assert machine["printable_area"] == ["0x0,250x0,250x250,0x250"]
+    assert machine["printable_height"] == ["250"]
 
 
 def test_bambu_writer_is_separate_from_orca_writer():
@@ -86,4 +89,3 @@ def test_writer_blocks_unresolved_critical_required_inputs():
     assert result.blocked
     keys = {r["canonical_key"] for r in result.required_user_inputs}
     assert "printer.basic_information.bed_shape" in keys
-

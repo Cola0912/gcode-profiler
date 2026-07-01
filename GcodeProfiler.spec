@@ -54,6 +54,14 @@ datas = [
     (os.path.join(ROOT, "THIRD_PARTY_LICENSES.md"), "."),
 ]
 
+_catalog_root = os.path.join(ROOT, "parameter_catalogs")
+if os.path.isdir(_catalog_root):
+    for _dir, _dirs, _files in os.walk(_catalog_root):
+        for _name in _files:
+            _src = os.path.join(_dir, _name)
+            _rel_dir = os.path.relpath(_dir, ROOT)
+            datas.append((_src, _rel_dir))
+
 a = Analysis(
     ["app.py"],
     pathex=[ROOT],

@@ -19,17 +19,38 @@ from PySide6.QtWidgets import (
     QProgressBar, QStatusBar, QFrame, QDoubleSpinBox,
 )
 
+GCODE_FIELD_TO_BLOCK = {
+    "gcode.machine_start_gcode": "start_gcode",
+    "gcode.machine_end_gcode": "end_gcode",
+    "gcode.layer_change_gcode": "layer_change_gcode",
+    "gcode.timelapse_gcode": "timelapse_gcode",
+    "gcode.toolchange_gcode": "toolchange_gcode",
+    "gcode.pause_gcode": "pause_gcode",
+    "gcode.template_custom_gcode": "template_custom_gcode",
+    "gcode.before_layer_change_gcode": "before_layer_change_gcode",
+    "gcode.process_layer_change_gcode": "process_layer_change_gcode",
+    "gcode.process_toolchange_gcode": "process_toolchange_gcode",
+    "gcode.process_pause_gcode": "process_pause_gcode",
+    "gcode.process_custom_gcode": "process_custom_gcode",
+}
+
 try:
     from .analyzer import analyze
     from . import schema as sc
     from . import exporters
     from . import export_flow
+    from . import importers
+    from .canonical import model as cn_model
+    from .canonical import adapter as cn_adapter
     from .settings_dialog import SettingsDialog
 except ImportError:
     from analyzer import analyze
     import schema as sc
     import exporters
     import export_flow
+    import importers
+    from canonical import model as cn_model
+    from canonical import adapter as cn_adapter
     from settings_dialog import SettingsDialog
 
 
@@ -58,15 +79,85 @@ class Model:
     def __init__(self):
         self.values, self.provenance = sc.default_values()
         self.filaments = [{"tool": 0, "nozzle_temp": None, "bed_temp": None, "retract_length": None}]
-        self.gcode_blocks = {"start_gcode": "", "end_gcode": "", "toolchange_gcode": ""}
+        self.gcode_blocks = {key: "" for key in set(GCODE_FIELD_TO_BLOCK.values())}
         self.meta = {"source": "新規作成", "method": "手動", "tool_count": 1, "total_layers": "—"}
+        self.canonical_profile = None
+        self.unmapped = {}
+        self.conflicts = []
 
     def load(self, result):
         self.values, self.provenance = sc.prefill_values(result)
         self.filaments = copy.deepcopy(result.get("filaments")) or self.filaments
         gb = result.get("gcode_blocks", {})
-        self.gcode_blocks = {k: gb.get(k, "") for k in ("start_gcode", "end_gcode", "toolchange_gcode")}
+        self.gcode_blocks = {k: gb.get(k, "") for k in set(GCODE_FIELD_TO_BLOCK.values())}
+        for field_key, block_key in GCODE_FIELD_TO_BLOCK.items():
+            if self.gcode_blocks.get(block_key):
+                self.values[field_key] = self.gcode_blocks[block_key]
+                self.provenance[field_key] = "explicit_metadata"
         self.meta = dict(result.get("meta", {}))
+        self.canonical_profile = None
+        self.unmapped = {}
+        self.conflicts = []
+
+    def load_canonical_profile(self, profile):
+        """Load a native-imported canonical profile into the legacy UI model."""
+        self.canonical_profile = copy.deepcopy(profile)
+        self.values, self.provenance = sc.default_values()
+        self.unmapped = copy.deepcopy(profile.get("unmapped", {}))
+        meta = profile.get("metadata", {})
+        self.conflicts = list(meta.get("conflicts", []))
+
+        for f in self._all_ui_fields():
+            ckey = self._field_canonical_key(f)
+            if not ckey:
+                continue
+            node = cn_model.get_value(profile, ckey)
+            if not self._is_value_node(node):
+                continue
+            value = node.get("effective")
+            if value is None:
+                continue
+            self.values[f.key] = value
+            self.provenance[f.key] = self._node_provenance(node)
+
+        self._load_filament_summary(profile)
+        src = profile.get("source", {})
+        slicer = src.get("source_slicer") or "Unknown"
+        version = src.get("source_version")
+        source = f"{slicer} {version}".strip() if version else slicer
+        self.meta = {
+            "source": source,
+            "method": "プロファイル読込",
+            "tool_count": len(self.filaments),
+            "total_layers": "—",
+            "profile_kind": meta.get("profile_kind"),
+            "unmapped_count": len(self.unmapped),
+            "conflict_count": len(self.conflicts),
+        }
+
+    def to_canonical_profile(self):
+        """Return canonical profile with UI edits layered as `edited` values."""
+        if self.canonical_profile is None:
+            return cn_adapter.legacy_to_canonical(self.to_result())
+        profile = copy.deepcopy(self.canonical_profile)
+        for f in self._all_ui_fields():
+            if self.provenance.get(f.key) != "edited":
+                continue
+            ckey = self._field_canonical_key(f)
+            if not ckey:
+                continue
+            value = self.values.get(f.key)
+            node = cn_model.get_value(profile, ckey)
+            cv = (cn_model.CanonicalValue.from_dict(node)
+                  if self._is_value_node(node)
+                  else cn_model.CanonicalValue(unit=f.unit or None, value_mode="absolute"))
+            cv.edited = value
+            cv.status = "user"
+            cv.source = "user"
+            if f.key not in cv.source_keys:
+                cv.source_keys.append(f.key)
+            cn_model.set_value(profile, ckey, cv)
+        return profile
 
     def to_result(self):
         result = {"meta": dict(self.meta), "quality": {}, "speed": {}, "strength": {},
@@ -78,9 +169,64 @@ class Model:
         result["meta"]["tool_count"] = len(self.filaments)
         result["meta"]["tools_used"] = [f.get("tool", i) for i, f in enumerate(self.filaments)]
         result["gcode_blocks"] = self.gcode_blocks
+        for field_key, block_key in GCODE_FIELD_TO_BLOCK.items():
+            value = self.values.get(field_key)
+            if value:
+                result["gcode_blocks"][block_key] = value
         if self.filaments and self.filaments[0].get("nozzle_temp") is not None:
             result["temperature"]["nozzle_temp"] = self.filaments[0]["nozzle_temp"]
         return result
+
+    @staticmethod
+    def _all_ui_fields():
+        for _group, (_title, schema) in sc.GROUPS.items():
+            yield from sc.all_fields(schema)
+
+    @staticmethod
+    def _is_value_node(node):
+        return isinstance(node, dict) and "effective" in node
+
+    @staticmethod
+    def _node_provenance(node):
+        if node.get("status") == "conflict":
+            return "conflict"
+        if node.get("edited") is not None:
+            return "edited"
+        if node.get("configured") is not None:
+            return "imported_profile"
+        if node.get("emitted") is not None:
+            return "runtime_command"
+        if node.get("observed") is not None:
+            return "estimated" if node.get("status") == "estimated" else "recovered"
+        if node.get("target_default") is not None:
+            return "target_default"
+        return "unknown"
+
+    @staticmethod
+    def _field_canonical_key(f):
+        if f.key in cn_adapter.LEGACY_MAP:
+            return cn_adapter.LEGACY_MAP[f.key]
+        if f.src and f.src in cn_adapter.LEGACY_MAP:
+            return cn_adapter.LEGACY_MAP[f.src]
+        if f.key in sc.ALIASES:
+            return sc.ALIASES[f.key]
+        return f.canonical_key or None
+
+    def _load_filament_summary(self, profile):
+        fl = {"tool": 0, "nozzle_temp": None, "bed_temp": None,
+              "retract_length": None, "diameter": None, "material": None}
+        pairs = {
+            "nozzle_temp": "material.temperature.nozzle",
+            "bed_temp": "material.temperature.bed",
+            "diameter": "material.filament.diameter",
+            "retract_length": "printer.extruder.retraction_length",
+            "material": "material.type",
+        }
+        for dst, ckey in pairs.items():
+            value = cn_model.effective_of(profile, ckey)
+            if value is not None:
+                fl[dst] = value
+        self.filaments = [fl]
 
 
 class AnalyzeWorker(QThread):
@@ -140,6 +286,8 @@ class MainWindow(QMainWindow):
         bar = QHBoxLayout()
         self.btn_open = QPushButton("📂 G-code を開く"); self.btn_open.clicked.connect(self.on_open)
         bar.addWidget(self.btn_open)
+        self.btn_import = QPushButton("📥 プロファイル読込"); self.btn_import.clicked.connect(self.on_import_profile)
+        bar.addWidget(self.btn_import)
         self.btn_new = QPushButton("✚ 新規"); self.btn_new.clicked.connect(self.on_new)
         bar.addWidget(self.btn_new)
         bar.addWidget(QLabel("径"))
@@ -211,7 +359,18 @@ class MainWindow(QMainWindow):
         self.info.setText(
             f"スライサー: {self.model.meta.get('source','—')}   |   "
             f"復元方法: {self.model.meta.get('method','—')}   |   "
-            f"ツール数: {self.model.meta.get('tool_count','—')}")
+            f"ツール数: {self.model.meta.get('tool_count','—')}"
+            f"{self._import_summary_text()}")
+
+    def _import_summary_text(self):
+        unmapped = self.model.meta.get("unmapped_count") or 0
+        conflicts = self.model.meta.get("conflict_count") or 0
+        parts = []
+        if unmapped:
+            parts.append(f"未対応/native-only: {unmapped}")
+        if conflicts:
+            parts.append(f"競合: {conflicts}")
+        return "   |   " + " / ".join(parts) if parts else ""
 
     # ------------------------------------------------------------------
     def on_new(self):
@@ -227,12 +386,45 @@ class MainWindow(QMainWindow):
             return
         self.open_path(path)
 
+    def on_import_profile(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "プロファイルを選択", "",
+            "スライサープロファイル (*.json *.ini *.config *.cfg *.fff *.3mf *.zip);;すべて (*.*)")
+        if not path:
+            return
+        try:
+            self.import_profile_path(path, show_message=True)
+        except Exception as exc:  # noqa
+            QMessageBox.critical(self, "プロファイル読込エラー", str(exc))
+
+    def import_profile_path(self, path, show_message=False):
+        """Import a native slicer profile into the editable model."""
+        profile = importers.import_profile(path)
+        self.model.load_canonical_profile(profile)
+        base = os.path.splitext(os.path.basename(path))[0]
+        display_name = profile.get("metadata", {}).get("display_name") or base
+        self.card_process.name_edit.setText(display_name)
+        self._refresh_cards()
+        det = profile.get("detection", {})
+        unmapped = len(profile.get("unmapped", {}))
+        warnings = profile.get("metadata", {}).get("inheritance_warnings", [])
+        self.statusBar().showMessage(
+            f"プロファイル読込完了 — {det.get('slicer', 'Unknown')} / 未対応 {unmapped} 項目")
+        if show_message:
+            msg = (f"スライサー: {det.get('slicer', 'Unknown')}\n"
+                   f"形式: {det.get('format', 'unknown')}\n"
+                   f"未対応/native-only: {unmapped} 項目")
+            if warnings:
+                msg += "\n\n継承警告:\n" + "\n".join(f"・{w}" for w in warnings[:8])
+            QMessageBox.information(self, "プロファイル読込完了", msg)
+
     def open_path(self, path):
         """Analyze the given file path (used by file dialog and CLI argument)."""
         self.gcode_path = path
         base = os.path.splitext(os.path.basename(path))[0]
         self.card_process.name_edit.setText(base)
-        self.progress.show(); self.btn_open.setEnabled(False); self.btn_new.setEnabled(False)
+        self.progress.show(); self.btn_open.setEnabled(False)
+        self.btn_import.setEnabled(False); self.btn_new.setEnabled(False)
         self.statusBar().showMessage("解析中…")
         self.worker = AnalyzeWorker(path, self.dia_spin.value())
         self.worker.done.connect(self.on_done)
@@ -240,11 +432,13 @@ class MainWindow(QMainWindow):
         self.worker.start()
 
     def on_failed(self, msg):
-        self.progress.hide(); self.btn_open.setEnabled(True); self.btn_new.setEnabled(True)
+        self.progress.hide(); self.btn_open.setEnabled(True)
+        self.btn_import.setEnabled(True); self.btn_new.setEnabled(True)
         QMessageBox.critical(self, "解析エラー", msg); self.statusBar().showMessage("解析失敗")
 
     def on_done(self, result):
-        self.progress.hide(); self.btn_open.setEnabled(True); self.btn_new.setEnabled(True)
+        self.progress.hide(); self.btn_open.setEnabled(True)
+        self.btn_import.setEnabled(True); self.btn_new.setEnabled(True)
         self.model.load(result)
         self._refresh_cards()
         self.statusBar().showMessage("解析完了 — 各カードをクリックして編集できます")
@@ -257,7 +451,11 @@ class MainWindow(QMainWindow):
         target = export_flow.target_id(display)
         # 1) build conversion plan and show a preview (Phase 4/5 pipeline)
         try:
-            _prof, plan = export_flow.build_plan_from_legacy(result, target)
+            if self.model.canonical_profile is not None:
+                _prof, plan = export_flow.build_plan_from_canonical(
+                    self.model.to_canonical_profile(), target)
+            else:
+                _prof, plan = export_flow.build_plan_from_legacy(result, target)
         except Exception as exc:  # noqa
             QMessageBox.critical(self, "変換エラー", str(exc)); return
         pv = export_flow.preview(plan)

@@ -35,6 +35,22 @@ def test_plan_and_preview_all_targets():
         assert pv["has_critical"] is True
 
 
+def test_printable_area_input_satisfies_required_bed_shape():
+    legacy = _legacy()
+    legacy["machine"] = {
+        "printable_area": "0x0,220x0,220x220,0x220",
+        "printable_height": 250,
+    }
+    _prof, plan = export_flow.build_plan_from_legacy(legacy, "orca")
+    required = {r["canonical_key"] for r in plan["required_user_inputs"]}
+    assert "printer.basic_information.bed_shape" not in required
+    assert "printer.basic_information.printable_height" not in required
+    entry = next(e for e in plan["entries"]
+                 if e["canonical_key"] == "printer.basic_information.bed_shape")
+    assert entry["target_keys"] == ["printable_area"]
+    assert entry["effective_value"] == "0x0,220x0,220x220,0x220"
+
+
 def test_writer_blocks_on_critical_then_unblocks_on_override():
     _prof, plan = export_flow.build_plan_from_legacy(_legacy(), "orca")
     blocked = export_flow.write_native(plan, name="T")

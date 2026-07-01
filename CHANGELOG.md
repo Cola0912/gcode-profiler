@@ -5,6 +5,34 @@ The format is based on Keep a Changelog; this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-07-01
+
+### Added
+- Expanded the visible/editable settings editor to 283 fields:
+  Printer 68, Filament 50, Process 165. The fixed UI schema now exposes
+  additional OrcaSlicer-style Printer / Filament / Process sections, independent
+  skirt/brim/raft line-width fields, multimaterial settings, G-code fields,
+  bed-type filament temperatures, ramming/volumetric-flow fields, feature jerk,
+  overhang 75-100% speed, and explicit support/raft path-vs-setting fields.
+- Added UI handling for `enabled_if` / `visible_if`, multi-line `kind="gcode"`
+  editors, native-key/canonical-key search coverage tests, and Basic/Advanced/
+  Expert filtering tests.
+- Added current handoff/release spec: `docs/V0_4_2_RELEASE_SPEC.md`.
+- Added native profile import foundation and GUI bridge currently covered by
+  `tests/test_importers.py`, while full Phase 6 native catalog/import migration
+  remains deferred.
+
+### Fixed
+- Export no longer treats an entered build area as missing. `machine.printable_area`
+  now maps through canonical `printer.basic_information.bed_shape`, and
+  `machine.printable_height` maps to
+  `printer.basic_information.printable_height`.
+- Orca/Bambu conversion and Orca machine writer now emit `printable_area` and
+  `printable_height` into the machine profile.
+- PyInstaller builds now bundle `parameter_catalogs`, so packaged smoke tests
+  can validate Orca/Bambu catalogs without project source files.
+- Release checksum generation now includes the portable zip asset.
+
 ## [0.4.1] - 2026-07-01
 
 ### Added

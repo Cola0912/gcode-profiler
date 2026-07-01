@@ -37,6 +37,10 @@ LEGACY_MAP = {
     "retraction.retract_speed": "printer.extruder.retraction_speed",
     "retraction.deretract_speed": "printer.extruder.deretraction_speed",
     "retraction.z_hop_height": "printer.extruder.z_hop",
+    "machine.printable_area": "printer.basic_information.bed_shape",
+    "machine.printable_height": "printer.basic_information.printable_height",
+    "machine.gcode_flavor": "printer.firmware.gcode_flavor",
+    "machine.nozzle_diameter": "printer.extruder.nozzle_diameter",
     "meta.nozzle_diameter_est": "printer.extruder.nozzle_diameter",
     "meta.filament_diameter": "material.filament.diameter",
 }

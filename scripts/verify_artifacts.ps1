@@ -25,6 +25,7 @@ if (Test-Path $exe) {
 # hashes
 $sums = @()
 foreach ($a in @("dist\portable\GcodeProfiler.exe",
+                 "dist\GcodeProfiler-portable-$version-x64.zip",
                  "dist\installer\GcodeProfiler-Setup-$version-x64.exe")) {
     if (Test-Path $a) { $sums += "{0}  {1}" -f (Get-FileHash $a -Algorithm SHA256).Hash, (Split-Path $a -Leaf) }
 }

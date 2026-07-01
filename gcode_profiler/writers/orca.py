@@ -51,11 +51,11 @@ def _stringify(values):
 def _array_values(values):
     out = {}
     for k, v in values.items():
-        if k in {"nozzle_temperature", "nozzle_temperature_initial_layer", "hot_plate_temp",
+        if k in {"printable_area", "printable_height",
+                 "nozzle_temperature", "nozzle_temperature_initial_layer", "hot_plate_temp",
                  "fan_max_speed", "nozzle_diameter", "retraction_length",
                  "retraction_speed", "z_hop"}:
             out[k] = [v]
         else:
             out[k] = v
     return out
-
